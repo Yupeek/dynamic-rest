@@ -63,7 +63,8 @@ class LocationSerializer(DynamicModelSerializer):
         'UserSerializer',
         source='user_set',
         many=True,
-        deferred=True)
+        deferred=True
+    )
     user_count = CountField('users', required=False, deferred=True)
     address = DynamicField(source='blob', required=False, deferred=True)
     cats = DynamicRelationField(
@@ -72,6 +73,9 @@ class LocationSerializer(DynamicModelSerializer):
         'CatSerializer', many=True, deferred=True)
     bad_cats = DynamicRelationField(
         'CatSerializer', source='annoying_cats', many=True, deferred=True)
+
+    def filter_queryset(self, query):
+        return query.exclude(name='Atlantis')
 
 
 class PermissionSerializer(DynamicModelSerializer):
@@ -193,6 +197,9 @@ class UserSerializer(DynamicModelSerializer):
     favorite_pet = DynamicGenericRelationField(required=False)
 
     def get_number_of_cats(self, user):
+        if not self.context.get('request'):
+            # Used in test_api.py::test_relation_includes_context
+            raise Exception("No request object in context")
         location = user.location
         return len(location.cat_set.all()) if location else 0
 
@@ -258,9 +265,13 @@ class DogSerializer(DynamicModelSerializer):
 
     class Meta:
         model = Dog
-        fields = ('id', 'name', 'origin', 'fur')
+        fields = ('id', 'name', 'origin', 'fur', 'is_red')
 
     fur = CharField(source='fur_color')
+    is_red = DynamicMethodField(deferred=True, requires=['fur_color'])
+
+    def get_is_red(self, instance):
+        return instance.fur_color == 'red'
 
 
 class HorseSerializer(DynamicModelSerializer):

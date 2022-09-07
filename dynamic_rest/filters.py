@@ -3,7 +3,7 @@
 from django.core.exceptions import ValidationError as InternalValidationError
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, Prefetch, Manager
-from django.utils import six
+import six
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import BooleanField, NullBooleanField
@@ -167,6 +167,7 @@ class DynamicFilterBackend(BaseFilterBackend):
         'lte',
         'isnull',
         'eq',
+        'iexact',
         None,
     )
 
@@ -346,10 +347,13 @@ class DynamicFilterBackend(BaseFilterBackend):
 
         return prefetches
 
+    def _make_model_queryset(self, model):
+        return model.objects.all()
+
     def _build_implicit_queryset(self, model, requirements):
         """Build a queryset based on implicit requirements."""
 
-        queryset = model.objects.all()
+        queryset = self._make_model_queryset(model)
         prefetches = {}
         self._build_implicit_prefetches(
             model,
@@ -508,6 +512,18 @@ class DynamicFilterBackend(BaseFilterBackend):
             requirements
         )
 
+        # Implicit requirements (i.e. via `requires`) can potentially
+        # include fields that haven't been explicitly included.
+        # Such fields would not be in `fields`, so they need to be added.
+        implicitly_included = set(requirements.keys()) - set(fields.keys())
+        if implicitly_included:
+            all_fields = serializer.get_all_fields()
+            fields.update({
+                field: all_fields[field]
+                for field in implicitly_included
+                if field in all_fields
+            })
+
         if filters is None:
             filters = self._get_requested_filters()
 
@@ -614,6 +630,12 @@ class FastDynamicFilterBackend(DynamicFilterBackend):
 
         return queryset
 
+    def _make_model_queryset(self, model):
+        queryset = super(FastDynamicFilterBackend, self)._make_model_queryset(
+            model
+        )
+        return FastQuery(queryset)
+
     def _serializer_filter(self, serializer=None, queryset=None):
         queryset.queryset = serializer.filter_queryset(
             queryset.queryset
@@ -639,8 +661,11 @@ class DynamicSortingFilter(OrderingFilter):
 
         ordering = self.get_ordering(request, queryset, view)
         if ordering:
-            return queryset.order_by(*ordering)
-
+            queryset = queryset.order_by(*ordering)
+            if any(['__' in o for o in ordering]):
+                # add distinct() to remove duplicates
+                # in case of order-by-related
+                queryset = queryset.distinct()
         return queryset
 
     def get_ordering(self, request, queryset, view):

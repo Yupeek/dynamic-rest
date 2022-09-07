@@ -32,6 +32,9 @@ DYNAMIC_REST = {
     # ENABLE_BULK_UPDATE: enable/disable update in bulk
     'ENABLE_BULK_UPDATE': True,
 
+    # ENABLE_PATCH_ALL: enable/disable patch by queryset
+    'ENABLE_PATCH_ALL': False,
+
     # DEFER_MANY_RELATIONS: automatically defer many-relations, unless
     # `deferred=False` is explicitly set on the field.
     'DEFER_MANY_RELATIONS': False,
@@ -57,6 +60,10 @@ DYNAMIC_REST = {
     # Can be overriden at the viewset level.
     'PAGE_SIZE_QUERY_PARAM': 'per_page',
 
+    # EXCLUDE_COUNT_QUERY_PARAM: global setting for the query parameter
+    # that disables counting during PageNumber pagination
+    'EXCLUDE_COUNT_QUERY_PARAM': 'exclude_count',
+
     # ADDITIONAL_PRIMARY_RESOURCE_PREFIX: String to prefix additional
     # instances of the primary resource when sideloading.
     'ADDITIONAL_PRIMARY_RESOURCE_PREFIX': '+',
@@ -69,6 +76,13 @@ DYNAMIC_REST = {
     # Enables caching of serializer fields to speed up serializer usage
     # Needs to also be configured on a per-serializer basis
     'ENABLE_FIELDS_CACHE': False,
+
+    # Enables use of hashid fields
+    'ENABLE_HASHID_FIELDS': False,
+
+    # Salt value to salt hash ids.
+    # Needs to be non-nullable if 'ENABLE_HASHID_FIELDS' is set to True
+    'HASHIDS_SALT': None,
 }
 
 
@@ -79,7 +93,6 @@ CLASS_ATTRS = [
 
 
 class Settings(object):
-
     def __init__(self, name, defaults, settings, class_attrs=None):
         self.name = name
         self.defaults = defaults

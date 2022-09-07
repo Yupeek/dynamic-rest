@@ -1,9 +1,10 @@
 import datetime
 import json
 
+import django
 from django.db import connection
 from django.test import override_settings
-from django.utils import six
+import six
 from rest_framework.test import APITestCase
 
 from tests.models import Cat, Group, Location, Permission, Profile, User
@@ -618,11 +619,24 @@ class TestUsersAPI(APITestCase):
         url = '/users/?filter{date_of_birth.gt}=0&filter{date_of_birth.lt}=0'
         response = self.client.get(url)
         self.assertEqual(400, response.status_code)
-        self.assertEqual(
-            ["'0' value has an invalid date format. "
-             "It must be in YYYY-MM-DD format."],
-            response.data
-        )
+        if django.VERSION[0] > 2:
+            from rest_framework.exceptions import ErrorDetail
+            self.assertEqual(
+                [
+                    ErrorDetail(
+                        string='“0” value has an invalid date format. '
+                               'It must be in YYYY-MM-DD format.',
+                        code='invalid'
+                    )
+                ],
+                response.data
+            )
+        else:
+            self.assertEqual(
+                ["'0' value has an invalid date format. "
+                 "It must be in YYYY-MM-DD format."],
+                response.data
+            )
 
     def test_get_with_filter_deferred(self):
         # Filtering deferred field should work
@@ -827,6 +841,51 @@ class TestUsersAPI(APITestCase):
                 }]
             }, json.loads(response.content.decode('utf-8')))
 
+    def test_implicit_vs_explicit_prefetch(self):
+        """
+        LocationSerializer has a built-in filter to hide Atlantis.
+        UserSerializer can explicitly include Location, and it can also
+        implicitly require Location through the `number_of_cats` field.
+        This test ensures that LocationSerializer.filter_queryset() is
+        being respected regardless of whether `User.location` is being
+        included implicitly or explicitly.
+        """
+        atlantis = Location.objects.create(name='Atlantis')
+        atlantian = User.objects.create(
+            name='Atlantian',
+            last_name='Human',
+            location=atlantis
+        )
+        Cat.objects.create(
+            name='Gato',
+            home=atlantis,
+            backup_home=self.fixture.locations[0],
+        )
+
+        url = (
+            '/users/%s/?'
+            'include[]=number_of_cats&'
+            'include[]=location.'
+        ) % atlantian.pk
+        response1 = self._get_json(url)
+
+        url = (
+            '/users/%s/?'
+            'include[]=number_of_cats&'
+            'exclude[]=location'
+        ) % atlantian.pk
+        response2 = self._get_json(url)
+
+        # Atlantis is hidden, therefore its cats are also hidden
+        self.assertEqual(
+            response1['user']['number_of_cats'],
+            0
+        )
+        self.assertEqual(
+            response1['user']['number_of_cats'],
+            response2['user']['number_of_cats']
+        )
+
     def test_boolean_filters_on_boolean_field(self):
         # create one dead user
         User.objects.create(name='Dead', last_name='Mort', is_dead=True)
@@ -879,6 +938,15 @@ class TestUsersAPI(APITestCase):
             [3, 2, 1, 1],
             [row['location'] for row in data['users']]
         )
+
+    def test_sort_relation_field_many(self):
+        url = '/locations/?sort[]=friendly_cats.name'
+        response = self.client.get(url)
+        self.assertEquals(200, response.status_code)
+        data = json.loads(response.content.decode('utf-8'))
+        ids = [row['id'] for row in data['locations']]
+        # no duplicates
+        self.assertEquals(len(ids), len(set(ids)))
 
 
 @override_settings(
@@ -1031,7 +1099,7 @@ class TestAlternateLocationsAPI(APITestCase):
         # sanity check: standard filter returns 1 result
         r = self.client.get('/alternate_locations/?filter{users.last_name}=1')
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(len(r.data['locations']), 1)
+        self.assertEqual(len(r.data.get('locations', [])), 1, r.data)
         location = r.data['locations'][0]
         self.assertEqual(location['name'], '0')
 
@@ -1106,6 +1174,16 @@ class TestRelationsAPI(APITestCase):
 
         content = json.loads(r.content.decode('utf-8'))
         self.assertTrue('locations' in content)
+
+    def test_relation_includes_context(self):
+        r = self.client.get('/locations/1/users/?include[]=number_of_cats')
+        self.assertEqual(200, r.status_code)
+
+        # Note: the DynamicMethodField for `number_of_cats` checks to
+        # ensure context is set, and raises if not. If the request
+        # succeeded and `number_of_cats` is returned, it means that check
+        # passed.
+        self.assertTrue('number_of_cats' in r.data['users'][0])
 
     def test_relation_excludes(self):
         r = self.client.get('/locations/1/users/?exclude[]=location')
@@ -1327,11 +1405,74 @@ class TestLinks(APITestCase):
 class TestDogsAPI(APITestCase):
 
     """
-    Tests for sorting
+    Tests for sorting and pagination
     """
 
     def setUp(self):
         self.fixture = create_fixture()
+
+    def test_sort_exclude_count(self):
+        # page 1
+        url = '/dogs/?sort[]=name&exclude_count=1&per_page=4'
+        # 1 query - one for getting dogs, 0 for count
+        with self.assertNumQueries(1):
+            response = self.client.get(url)
+        self.assertEquals(200, response.status_code)
+        expected_data = [{
+            'id': 2,
+            'name': 'Air-Bud',
+            'origin': 'Air Bud 4: Seventh Inning Fetch',
+            'fur': 'gold'
+        }, {
+            'id': 1,
+            'name': 'Clifford',
+            'origin': 'Clifford the big red dog',
+            'fur': 'red'
+        }, {
+            'id': 4,
+            'name': 'Pluto',
+            'origin': 'Mickey Mouse',
+            'fur': 'brown and white'
+        }, {
+            'id': 3,
+            'name': 'Spike',
+            'origin': 'Rugrats',
+            'fur': 'brown'
+        }]
+        expected_meta = {
+            'page': 1,
+            'per_page': 4,
+            'more_pages': True
+        }
+        actual_response = json.loads(
+            response.content.decode('utf-8'))
+        actual_data = actual_response.get('dogs')
+        actual_meta = actual_response.get('meta')
+        self.assertEquals(expected_data, actual_data)
+        self.assertEquals(expected_meta, actual_meta)
+
+        # page 2
+        url = f'{url}&page=2'
+        with self.assertNumQueries(1):
+            response = self.client.get(url)
+        self.assertEquals(200, response.status_code)
+        expected_data = [{
+            'id': 5,
+            'name': 'Spike',
+            'origin': 'Tom and Jerry',
+            'fur': 'light-brown'
+        }]
+        expected_meta = {
+            'page': 2,
+            'per_page': 4,
+            'more_pages': False
+        }
+        actual_response = json.loads(
+            response.content.decode('utf-8'))
+        actual_data = actual_response.get('dogs')
+        actual_meta = actual_response.get('meta')
+        self.assertEquals(expected_data, actual_data)
+        self.assertEquals(expected_meta, actual_meta)
 
     def test_sort_implied_all(self):
         url = '/dogs/?sort[]=name'

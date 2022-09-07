@@ -26,7 +26,7 @@ from tests.serializers import (
     UserLocationSerializer,
     UserSerializer,
     ZebraSerializer
-    )
+)
 
 
 class UserViewSet(DynamicModelViewSet):
@@ -77,7 +77,7 @@ class GroupNoMergeDictViewSet(DynamicModelViewSet):
                     raise exceptions.ValidationError(
                         "request.data is not a dict"
                     )
-            except:
+            except BaseException:
                 pass
 
         return response
@@ -151,6 +151,7 @@ class DogViewSet(DynamicModelViewSet):
     model = Dog
     serializer_class = DogSerializer
     queryset = Dog.objects.all()
+    ENABLE_PATCH_ALL = True
 
 
 class HorseViewSet(DynamicModelViewSet):

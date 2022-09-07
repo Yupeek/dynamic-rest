@@ -1,4 +1,5 @@
 """This module contains custom router classes."""
+import copy
 from collections import OrderedDict
 
 # Backwards compatability for django < 1.10.x
@@ -7,18 +8,37 @@ try:
 except ImportError:
     from django.core.urlresolvers import get_script_prefix
 
-from django.utils import six
+import six
+
+import rest_framework
 from rest_framework import views
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.routers import DefaultRouter, Route, replace_methodname
+from rest_framework.routers import DefaultRouter, Route
 
 from dynamic_rest.meta import get_model_table
 from dynamic_rest.conf import settings
 
+try:
+    from rest_framework.routers import replace_methodname
+except ImportError:
+    def replace_methodname(format_string, methodname):
+        """
+        Partially format a format_string, swapping out any
+        '{methodname}' or '{methodnamehyphen}' components.
+        """
+        methodnamehyphen = methodname.replace('_', '-')
+        ret = format_string
+        ret = ret.replace('{methodname}', methodname)
+        ret = ret.replace('{methodnamehyphen}', methodnamehyphen)
+        return ret
+
 directory = {}
 resource_map = {}
 resource_name_map = {}
+drf_version = tuple(
+    int(part) for part in rest_framework.__version__.split('.')
+)
 
 
 def get_directory(request):
@@ -75,7 +95,7 @@ def modify_list_route(routes):
 
 
 class DynamicRouter(DefaultRouter):
-    routes = list(DefaultRouter.routes)
+    routes = copy.deepcopy(DefaultRouter.routes)
     modify_list_route(routes)
 
     def __init__(self, *args, **kwargs):
@@ -170,7 +190,7 @@ class DynamicRouter(DefaultRouter):
             resource_key = serializer.get_resource_key()
             resource_name = serializer.get_name()
             path_name = serializer.get_plural_name()
-        except:
+        except BaseException:
             import traceback
             traceback.print_exc()
             raise Exception(
@@ -314,6 +334,10 @@ class DynamicRouter(DefaultRouter):
         fields = getattr(serializer, 'get_link_fields', lambda: [])()
 
         route_name = '{basename}-{methodnamehyphen}'
+        if drf_version >= (3, 8, 0):
+            route_compat_kwargs = {'detail': False}
+        else:
+            route_compat_kwargs = {}
 
         for field_name, field in six.iteritems(fields):
             methodname = 'list_related'
@@ -325,6 +349,7 @@ class DynamicRouter(DefaultRouter):
                 url=url,
                 mapping={'get': methodname},
                 name=replace_methodname(route_name, field_name),
-                initkwargs={}
+                initkwargs={},
+                **route_compat_kwargs
             ))
         return routes

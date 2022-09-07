@@ -10,21 +10,15 @@ endef
 
 .PHONY: docs
 
-pypi_register_test: install
-	$(call header,"Registering with PyPi - test")
-	@. $(INSTALL_DIR)/bin/activate; python setup.py register -r pypitest
-
-pypi_register: install
-	$(call header,"Registering with PyPi")
-	@. $(INSTALL_DIR)/bin/activate; python setup.py register -r pypi
-
 pypi_upload_test: install
 	$(call header,"Uploading new version to PyPi - test")
-	@. $(INSTALL_DIR)/bin/activate; python setup.py sdist upload -r pypitest
+	@. $(INSTALL_DIR)/bin/activate; python setup.py sdist
+	@twine upload --repository testpypi dist/*
 
 pypi_upload: install
 	$(call header,"Uploading new version to PyPi")
-	@. $(INSTALL_DIR)/bin/activate; python setup.py sdist upload -r pypi
+	@. $(INSTALL_DIR)/bin/activate; python setup.py sdist
+	@twine upload dist/*
 
 docs: install
 	$(call header,"Building docs")
@@ -41,11 +35,11 @@ install: $(INSTALL_DIR)
 # Install/update dependencies
 # Runs whenever the requirements.txt file changes
 $(INSTALL_DIR): $(INSTALL_DIR)/bin/activate
-$(INSTALL_DIR)/bin/activate: requirements.txt install_requires.txt dependency_links.txt
+$(INSTALL_DIR)/bin/activate: requirements.txt install_requires.txt
 	$(call header,"Updating dependencies")
 	@test -d $(INSTALL_DIR) || virtualenv $(INSTALL_DIR)
 	@$(INSTALL_DIR)/bin/pip install -q --upgrade pip setuptools flake8==2.4.0
-	@$(INSTALL_DIR)/bin/pip install --process-dependency-links -Ur requirements.txt
+	@$(INSTALL_DIR)/bin/pip install -U -r requirements.txt
 	@touch $(INSTALL_DIR)/bin/activate
 
 fixtures: install
@@ -76,7 +70,7 @@ integration: install lint
 
 test_just: install lint
 	$(call header,"Running unit tests")
-	@$(INSTALL_DIR)/bin/py.test --cov=$(APP_NAME) -k $(TEST) --ignore=build --ignore=benchmarks
+	@$(INSTALL_DIR)/bin/py.test --cov=$(APP_NAME) -k $(TEST) --ignore=build --ignore=benchmarks --nomigrations
 
 # Run all tests (tox)
 tox: install
@@ -115,7 +109,7 @@ start: install
 # Lint the project
 lint: clean_working_directory
 	$(call header,"Linting code")
-	@find . -type f -name '*.py' -not -path '$(INSTALL_DIR)/*' -not -path './docs/*' -not -path '$(INSTALL_DIR)/*' | xargs $(INSTALL_DIR)/bin/flake8
+	@find . -type f -name '*.py' -not -path '$(INSTALL_DIR)/*' -not -path './docs/*' -not -path './env/*' -not -path '$(INSTALL_DIR)/*' | xargs $(INSTALL_DIR)/bin/flake8
 
 # Auto-format the project
 format: clean_working_directory

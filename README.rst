@@ -1,5 +1,5 @@
 Dynamic REST
-============
+===================
 
 **Dynamic API extensions for Django REST Framework**
 
@@ -34,12 +34,13 @@ over HTTP.
 Maintainers
 -----------
 
--  `Anthony Leontiev <mailto:ant@altschool.com>`__
--  `Ryo Chijiiwa <mailto:ryo@altschool.com>`__
+-  `Anthony Leontiev <mailto:aleontiev@tohigherground.com>`__
+-  `Savinay Nangalia <mailto:snangalia@tohigherground.com>`__
+-  `Christina D'Astolfo <mailto:cdastolfo@tohigherground.com>`__
 
 Requirements
 ============
 
--  Python (2.7, 3.3, 3.4, 3.5)
--  Django (1.8, 1.9, 1.10, 1.11)
--  Django REST Framework (3.1, 3.2, 3.3, 3.4, 3.5)
+-  Python (3.6, 3.7, 3.8)
+-  Django (2.2, 3.1, 3.2)
+-  Django REST Framework (3.11, 3.12, 3.13)

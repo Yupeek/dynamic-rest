@@ -1,23 +1,30 @@
-import sys
 from setuptools import find_packages, setup
 
 NAME = 'dynamic-rest'
-DESCRIPTION = 'Adds Dynamic API support to Django REST Framework.'
+DESCRIPTION = 'Dynamic API support to Django REST Framework.'
 URL = 'http://github.com/AltSchool/dynamic-rest'
-VERSION = '1.9.1'
+VERSION = '2.1.4'
 SCRIPTS = ['manage.py']
 
 setup(
     description=DESCRIPTION,
     include_package_data=True,
-    dependency_links=open('dependency_links.txt').readlines(),
-    install_requires=open('install_requires.txt'
-                          if sys.version_info.major == 2
-                          else 'install_requires_python3.txt').readlines(),
+    install_requires=open('install_requires.txt').readlines(),
     long_description=open('README.rst').read(),
     name=NAME,
     packages=find_packages(),
     scripts=SCRIPTS,
     url=URL,
-    version=VERSION
+    version=VERSION,
+    classifiers=[
+        'Framework :: Django',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: BSD License',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+    ],
 )

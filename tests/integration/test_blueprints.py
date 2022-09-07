@@ -1,10 +1,14 @@
 from unittest import TestCase, skipIf
-from dj.test import TemporaryApplication
 from django.conf import settings
 import requests
 import time
 import json
 import os
+
+try:
+    from djay.test import TemporaryApplication
+except ImportError:
+    from dj.test import TemporaryApplication
 
 
 class DJBlueprintsTestCase(TestCase):
@@ -14,8 +18,16 @@ class DJBlueprintsTestCase(TestCase):
         'Integration tests disabled'
     )
     def test_blueprints(self):
+        params = {
+            "app": "dummy",
+            "description": "dummy",
+            "author": "dummy",
+            "email": "dummy@foo.com",
+            "version": "0.0.1",
+            "django_version": "2.2",
+        }
         # generate a test application
-        application = TemporaryApplication()
+        application = TemporaryApplication(params=params)
         # add a model
         application.execute('generate model foo --not-interactive')
         # create and apply migrations
@@ -27,7 +39,7 @@ class DJBlueprintsTestCase(TestCase):
         # generate an API endpoint for the generated model
         application.execute('generate api v0 foo --not-interactive')
         # start the server
-        server = application.execute('serve 9123', async=True)
+        server = application.execute('serve 9123', run_async=True)
         time.sleep(2)
 
         # verify a simple POST flow for the "foo" resource
