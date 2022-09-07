@@ -675,6 +675,8 @@ class DynamicSortingFilter(OrderingFilter):
         This method overwrites the DRF default so it can parse the array.
         """
         params = view.get_request_feature(view.SORT)
+        if len(params) == 1 and params[0].strip() == '?':
+            return ['?']
         if params:
             fields = [param.strip() for param in params]
             valid_ordering, invalid_ordering = self.remove_invalid_fields(
