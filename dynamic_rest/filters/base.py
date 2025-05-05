@@ -462,3 +462,11 @@ class DynamicFilterBackend(BaseFilterBackend):
         if DEBUG:
             queryset._using_prefetches = prefetches  # pylint: disable=protected-access
         return queryset
+
+class DynamicFilterNoPrefetchBackend(DynamicFilterBackend):
+    """A DRF filter backend that constructs DREST QuerySets without prefetching.
+
+    This backend is responsible for interpreting and applying
+    filters, includes, and excludes to the base queryset of a view.
+    """
+    DISABLE_PREFETCHING = True
