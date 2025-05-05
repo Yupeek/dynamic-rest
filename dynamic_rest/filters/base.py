@@ -102,6 +102,7 @@ class DynamicFilterBackend(BaseFilterBackend):
     This backend is responsible for interpreting and applying
     filters, includes, and excludes to the base queryset of a view.
     """
+    DISABLE_PREFETCHING = False
 
     def filter_queryset(self, request: Request, queryset: QuerySet, view) -> QuerySet:
         """Filter the queryset.
@@ -119,7 +120,7 @@ class DynamicFilterBackend(BaseFilterBackend):
         # after this is called may not behave as expected
         extra_filters = self.view.get_extra_filters(request)
 
-        disable_prefetches = self.view.is_update()
+        disable_prefetches = self.view.is_update() or self.DISABLE_PREFETCHING
 
         return self._build_queryset(
             queryset=queryset,
@@ -391,14 +392,14 @@ class DynamicFilterBackend(BaseFilterBackend):
         if filters is None:
             filters = _get_requested_filters(getattr(self, "view", None))
 
-        # build nested Prefetch queryset
-        self._build_requested_prefetches(
-            prefetches, requirements, model, fields, filters
-        )
-
-        # build remaining prefetches out of internal requirements
-        # that are not already covered by request requirements
-        self._build_implicit_prefetches(model, prefetches, requirements)
+        if not disable_prefetches:
+            # build nested Prefetch queryset
+            self._build_requested_prefetches(
+                prefetches, requirements, model, fields, filters
+            )
+            # build remaining prefetches out of internal requirements
+            # that are not already covered by request requirements
+            self._build_implicit_prefetches(model, prefetches, requirements)
 
         # use requirements at this level to limit fields selected
         # only do this for GET requests where we are not requesting the
@@ -461,3 +462,14 @@ class DynamicFilterBackend(BaseFilterBackend):
         if DEBUG:
             queryset._using_prefetches = prefetches  # pylint: disable=protected-access
         return queryset
+
+
+class DynamicFilterNoPrefetchBackend(DynamicFilterBackend):
+    """
+    A DRF filter backend that constructs DREST QuerySets without prefetching.
+
+    This backend is responsible for interpreting and applying
+    filters, includes, and excludes to the base queryset of a view.
+    """
+
+    DISABLE_PREFETCHING = True
